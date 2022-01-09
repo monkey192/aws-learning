@@ -6,7 +6,7 @@ Parameters:
     Type: String
     Default: ""
 
-Resources: 
+Resources:
   s3Bucket:
     Type: AWS::S3::Bucket
     Properties:

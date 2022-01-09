@@ -1,0 +1,138 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: |
+  Create stack for CICD. Build image and push to AWS ECR
+Parameters: 
+  Env:
+    Description: Target environment (dev, stg, prod)
+    Type: String
+    Default: dev
+    AllowedValues: 
+      - dev
+      - stg
+      - prod
+  GithubRepoName:
+    Description: Github repository name
+    Type: String
+  RepoBranchName:
+    Description: Branch name
+    Type: String
+  GitHubOwner:
+    Type: String
+  OauthToken:
+    Type: String
+
+Resources: 
+# Create S3 Bucket
+  s3BucketStack:
+    Type: AWS::S3::Bucket
+    Properties: 
+      Tags:
+        - Key: env
+          Value: !Ref Env
+
+# ContainerRegistry
+  ContainerRegistry:
+    Type: AWS::ECR::Repository
+    Properties: 
+      RepositoryName: demo-dog
+      Tags:
+        - key: env
+          value: !Ref Env
+# CodeBuild
+  CodeBuild:
+    Type: AWS::CodeBuild::Project    
+    Properties:
+      Name: !Sub ${AWS::StackName}-${Env}
+      ServiceRole: !Ref CodeBuildServiceRole
+      Artifacts:
+        Type: CODEPIPELINE
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec.yaml
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        Type: LINUX_CONTAINER
+        PrivilegedMode: True
+        EnvironmentVariables:
+          - Name: REPOSITORY_URI
+            Type: PLAINTEXT
+            Value: !GetAtt ContainerRegistry.RepositoryUri
+      
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/PowerUserAccess
+
+# Code Pipeline
+  CodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/PowerUserAccess
+      Policies:
+        - PolicyName: !Sub ${AWS::StackName}-codebuild-service-policy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Resource:
+                  - "*"
+                Action:
+                  - iam:PassRole
+  CodePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub ${AWS::StackName}-codepipeline-${Env}
+      RoleArn: !GetAtt CodePipelineServiceRole.Arn
+      RestartExecutionOnUpdate: false
+      ArtifactStore:
+        Type: S3
+        Location: !Ref s3BucketStack
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: ThirdParty
+                Provider: GitHub
+                Version: 1
+              Configuration:
+                Owner: !Ref GitHubOwner
+                Repo: !Ref GithubRepoName
+                Branch: !Ref RepoBranchName
+                OAuthToken: !Ref OauthToken
+                PollForSourceChanges: true
+              OutputArtifacts:
+                - Name: Src
+        - Name: Build
+          Actions:
+            - Name: BuildAndPushImage
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              Configuration:
+                ProjectName: !Ref CodeBuild
+              InputArtifacts:
+                - Name: Src
+              OutputArtifacts:
+                - Name: Build
+            

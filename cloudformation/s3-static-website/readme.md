@@ -2,6 +2,7 @@
 
 ### Cloud formation cmd cheatsheet
 - Deploy a stack
+
 ```sh
 aws cloudformation deploy \
 --template-file ./cf-s3-static-web.yaml \
@@ -14,3 +15,4 @@ aws cloudformation deploy \
 aws cloudformation delete-stack \
 --stack-name my-s3-web
 ```
+
