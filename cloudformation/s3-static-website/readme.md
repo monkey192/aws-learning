@@ -1,4 +1,6 @@
-### The helloworld about aws cloud formation
+## S3 static web 
+
+create a website hosting in AWS S3
 
 ### Cloud formation cmd cheatsheet
 - Deploy a stack
