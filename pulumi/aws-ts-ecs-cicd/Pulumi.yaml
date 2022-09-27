@@ -1,0 +1,3 @@
+name: aws-ts-ecs-cicd
+description: AWS ECS - CICD - Typescript
+runtime: nodejs
